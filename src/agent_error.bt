@@ -1,11 +1,11 @@
 // Copyright 2026 James Casey
 // SPDX-License-Identifier: Apache-2.0
 
-/// TaggedError — shared base for this package's kind/detail-tagged error
+/// AgentError — shared base for this package's kind/detail-tagged error
 /// values (CodexError, ClaudeError).
 /// Provides the common "ClassName(kind): detail" displayString so each
 /// subclass only needs to declare its own extra fields and factories.
-typed Value subclass: TaggedError
+typed Value subclass: AgentError
   field: kind :: String = ""
   field: detail :: Printable | Nil = nil
 

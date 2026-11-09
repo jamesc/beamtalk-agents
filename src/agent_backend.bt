@@ -23,8 +23,8 @@
 ///   (call again); a Result ends the turn.
 /// - `stopProcess` shuts the backend down; safe to call twice.
 Protocol define: AgentBackend
-  startSession -> Result(Dictionary, TaggedError)
-  startTurn: sessionId :: String prompt: prompt :: String title: title :: String -> Result(Dictionary, TaggedError)
-  streamStep -> Result(Dictionary, TaggedError) | Nil
-  turnTimeout -> TaggedError
+  startSession -> Result(Dictionary, AgentError)
+  startTurn: sessionId :: String prompt: prompt :: String title: title :: String -> Result(Dictionary, AgentError)
+  streamStep -> Result(Dictionary, AgentError) | Nil
+  turnTimeout -> AgentError
   stopProcess -> Nil

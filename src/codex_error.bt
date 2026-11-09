@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// CodexError — typed error for codex subprocess failures.
-typed TaggedError subclass: CodexError
+typed AgentError subclass: CodexError
   field: step :: String | Nil
   field: exitCode :: Integer | Nil
   field: message :: Dictionary | Nil

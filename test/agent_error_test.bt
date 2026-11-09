@@ -1,18 +1,18 @@
 // Copyright 2026 James Casey
 // SPDX-License-Identifier: Apache-2.0
 
-// Tests for TaggedError and the shared displayString it gives the
+// Tests for AgentError and the shared displayString it gives the
 // domain errors (CodexError, ClaudeError) that subclass it.
 
-TestCase subclass: TaggedErrorTest
+TestCase subclass: AgentErrorTest
 
   testBaseDisplayStringWithNoDetail =>
-    err := TaggedError new: #{#kind => "some_kind"}
-    self assert: err displayString equals: "TaggedError(some_kind)"
+    err := AgentError new: #{#kind => "some_kind"}
+    self assert: err displayString equals: "AgentError(some_kind)"
 
   testBaseDisplayStringWithDetail =>
-    err := TaggedError new: #{#kind => "some_kind", #detail => "extra info"}
-    self assert: err displayString equals: "TaggedError(some_kind): extra info"
+    err := AgentError new: #{#kind => "some_kind", #detail => "extra info"}
+    self assert: err displayString equals: "AgentError(some_kind): extra info"
 
   testCodexErrorDisplayString =>
     err := CodexError notFound: "no thread"

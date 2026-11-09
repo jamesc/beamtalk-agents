@@ -215,7 +215,7 @@ typed Actor subclass: ClaudeBackend
   /// a fresh session answers "" here and the real id is recorded
   /// (and emitted) when `streamStep` sees init. With
   /// `resumeSessionId` configured, that id is answered directly.
-  startSession -> Result(Dictionary, TaggedError) =>
+  startSession -> Result(Dictionary, AgentError) =>
     Logger info: "claude session starting" metadata: #{
       "workspace" => self.workspacePath,
       "command" => self.command
@@ -279,7 +279,7 @@ typed Actor subclass: ClaudeBackend
   /// caller pumps `streamStep` until the `result` message ends it.
   /// `title` is advisory (the wire has no per-turn titles) and is only
   /// logged. Answers the session id for the runner's session slot.
-  startTurn: _sessionId :: String prompt: prompt :: String title: title :: String -> Result(Dictionary, TaggedError) =>
+  startTurn: _sessionId :: String prompt: prompt :: String title: title :: String -> Result(Dictionary, AgentError) =>
     Logger info: "claude turn starting" metadata: #{"title" => title}
     self sendJson: #{
       "type" => "user",
@@ -290,13 +290,13 @@ typed Actor subclass: ClaudeBackend
   /// Reads and processes the next stream event. Returns nil if no
   /// terminal event yet (caller should call again), a Result ok on the
   /// `result` success message, or a Result error on failure/timeout.
-  streamStep -> Result(Dictionary, TaggedError) | Nil =>
+  streamStep -> Result(Dictionary, AgentError) | Nil =>
     event := self readEvent: 1000
     event isNil ifTrue: [^nil]
     event isError ifTrue: [^event]
     self handleMessage: event unwrap
 
-  handleMessage: msg :: Dictionary -> Result(Dictionary, TaggedError) | Nil =>
+  handleMessage: msg :: Dictionary -> Result(Dictionary, AgentError) | Nil =>
     type := msg at: "type" ifAbsent: [nil]
     type =:= "control_request" ifTrue: [^self handleControl: msg]
     type =:= "result" ifTrue: [^self handleResult: msg]
@@ -315,7 +315,7 @@ typed Actor subclass: ClaudeBackend
     self emitEvent: msg
     nil
 
-  handleResult: msg :: Dictionary -> Result(Dictionary, TaggedError) =>
+  handleResult: msg :: Dictionary -> Result(Dictionary, AgentError) =>
     subtype := msg at: "subtype" ifAbsent: ["success"]
     self emitEvent: msg
     subtype =:= "success"
@@ -335,7 +335,7 @@ typed Actor subclass: ClaudeBackend
   /// Answers one inbound `control_request`. Every control request must
   /// get a response or the turn stalls. Unknown subtypes are answered
   /// with an error (still counts as answering).
-  handleControl: msg :: Dictionary -> Result(Dictionary, TaggedError) | Nil =>
+  handleControl: msg :: Dictionary -> Result(Dictionary, AgentError) | Nil =>
     request := msg at: "request" ifAbsent: [#{}]
     requestId := msg at: "request_id" ifAbsent: [nil]
     subtype := request at: "subtype" ifAbsent: [nil]
@@ -359,7 +359,7 @@ typed Actor subclass: ClaudeBackend
   /// Answers a `can_use_tool` prompt per the configured policy, then
   /// continues streaming (nil) — except AskUserQuestion, which needs a
   /// human: deny it and end the turn like CodexClient does.
-  handlePermissionAsk: request :: Dictionary requestId: requestId :: String -> Result(Dictionary, TaggedError) | Nil =>
+  handlePermissionAsk: request :: Dictionary requestId: requestId :: String -> Result(Dictionary, AgentError) | Nil =>
     toolName := request at: "tool_name" ifAbsent: ["unknown"]
     input := request at: "input" ifAbsent: [#{}]
     toolName =:= "AskUserQuestion"
@@ -404,7 +404,7 @@ typed Actor subclass: ClaudeBackend
   // --- Subprocess lifecycle ---
 
   /// Timeout error in this backend's taxonomy (AgentBackend seam).
-  turnTimeout -> TaggedError => ClaudeError turnTimeout
+  turnTimeout -> AgentError => ClaudeError turnTimeout
 
   terminate: _reason :: Object -> Nil => self stopProcess
 
