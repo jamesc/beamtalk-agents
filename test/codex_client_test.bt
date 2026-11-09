@@ -4,10 +4,7 @@
 TestCase subclass: CodexClientTest
 
   testStartCreatesActor =>
-    config := #{
-      "command" => "echo hello",
-      "readTimeoutMs" => 1000
-    }
+    config := #{"command" => "echo hello", "readTimeoutMs" => 1000}
     client := CodexClient
       start: "/tmp"
       config: config
@@ -17,10 +14,7 @@ TestCase subclass: CodexClientTest
 
   // --- stopProcess guards (late proc slot) ---
   testStopProcessWithoutLaunch =>
-    config := #{
-      "command" => "echo hello",
-      "readTimeoutMs" => 1000
-    }
+    config := #{"command" => "echo hello", "readTimeoutMs" => 1000}
     client := CodexClient
       start: "/tmp"
       config: config
@@ -30,10 +24,7 @@ TestCase subclass: CodexClientTest
     self assert: client stop equals: #ok
 
   testStopProcessIdempotent =>
-    config := #{
-      "command" => "echo hello",
-      "readTimeoutMs" => 1000
-    }
+    config := #{"command" => "echo hello", "readTimeoutMs" => 1000}
     client := CodexClient
       start: "/tmp"
       config: config

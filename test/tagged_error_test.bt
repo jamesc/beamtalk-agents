@@ -1,0 +1,31 @@
+// Copyright 2026 James Casey
+// SPDX-License-Identifier: Apache-2.0
+
+// Tests for TaggedError and the shared displayString it gives the
+// domain errors (CodexError, ClaudeError) that subclass it.
+
+TestCase subclass: TaggedErrorTest
+
+  testBaseDisplayStringWithNoDetail =>
+    err := TaggedError new: #{#kind => "some_kind"}
+    self assert: err displayString equals: "TaggedError(some_kind)"
+
+  testBaseDisplayStringWithDetail =>
+    err := TaggedError new: #{#kind => "some_kind", #detail => "extra info"}
+    self assert: err displayString equals: "TaggedError(some_kind): extra info"
+
+  testCodexErrorDisplayString =>
+    err := CodexError notFound: "no thread"
+    self assert: err displayString equals: "CodexError(not_found): no thread"
+
+  testCodexErrorWithoutDetail =>
+    err := CodexError turnTimeout
+    self assert: err displayString equals: "CodexError(turn_timeout)"
+
+  testClaudeErrorDisplayString =>
+    err := ClaudeError notFound: "no binary"
+    self assert: err displayString equals: "ClaudeError(not_found): no binary"
+
+  testClaudeErrorWithoutDetail =>
+    err := ClaudeError turnTimeout
+    self assert: err displayString equals: "ClaudeError(turn_timeout)"

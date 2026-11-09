@@ -21,10 +21,7 @@ TestCase subclass: CodexClientIntegrationTest
 
   testLaunchAndHandshake =>
     self.hasCodex ifFalse: [^self skip: "codex not installed"]
-    config := #{
-      "command" => "codex app-server",
-      "readTimeoutMs" => 30000
-    }
+    config := #{"command" => "codex app-server", "readTimeoutMs" => 30000}
     client := CodexClient
       start: self.tmpDir
       config: config
@@ -49,10 +46,7 @@ TestCase subclass: CodexClientIntegrationTest
 
   testStartTurn =>
     self.hasCodex ifFalse: [^self skip: "codex not installed"]
-    config := #{
-        "command" => "codex app-server",
-        "readTimeoutMs" => 30000
-      }
+    config := #{"command" => "codex app-server", "readTimeoutMs" => 30000}
     client := CodexClient
       start: self.tmpDir
       config: config
@@ -105,10 +99,7 @@ TestCase subclass: CodexClientIntegrationTest
 
   testLaunchFailsWithBadCommand =>
     self.hasCodex ifFalse: [^self skip: "codex not installed"]
-    config := #{
-      "command" => "nonexistent_command_xyz",
-      "readTimeoutMs" => 2000
-    }
+    config := #{"command" => "nonexistent_command_xyz", "readTimeoutMs" => 2000}
     client := CodexClient
       start: self.tmpDir
       config: config
