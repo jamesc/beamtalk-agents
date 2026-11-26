@@ -130,17 +130,21 @@ typed Actor subclass: ClaudeBackend
   /// Carried on `result` (and `assistant`) messages as
   /// `{"input_tokens", "output_tokens"}`; `total` is their sum.
   class extractUsage: msg :: Dictionary -> Dictionary | Nil =>
-    usage := msg at: "usage" ifAbsent: [nil]
-    usage isNil
-      ifTrue: [
-        inner := msg at: "message" ifAbsent: [nil]
-        usage := inner match: [
+    direct := msg at: "usage" ifAbsent: [nil]
+    usage := direct
+      ifNil: [
+        (msg at: "message" ifAbsent: [nil]) match: [
           d :: Dictionary -> (d at: "usage" ifAbsent: [nil]);
           _ -> nil
         ]
       ]
-    usage isNil ifTrue: [^nil]
-    (usage isKindOf: Dictionary) ifFalse: [^nil]
+    usage match: [
+      u :: Dictionary -> (self usageCounters: u);
+      _ -> nil
+    ]
+
+  /// `{input, output, total}` counters from a usage dictionary.
+  class usageCounters: usage :: Dictionary -> Dictionary =>
     input := usage at: "input_tokens" ifAbsent: [0]
     output := usage at: "output_tokens" ifAbsent: [0]
     #{
@@ -201,10 +205,17 @@ typed Actor subclass: ClaudeBackend
         ] ifFalse: [^Result error: (ClaudeError portExit: exitCode)]
       ]
     Logger debug: "claude << " ++ line asStringUnchecked
-    parsed := [Json parse: line asStringUnchecked] on: Error do: [:_e | nil]
-    parsed isNil ifTrue: [^nil]
-    ((parsed unwrap) isKindOf: Dictionary) ifFalse: [^nil]
+    parsed := [
+      Json parse: line asStringUnchecked
+    ] on: Error do: [:e | Result error: e message]
     parsed
+      ifOk: [:value |
+        value match: [
+          _d :: Dictionary -> parsed;
+          _ -> nil
+        ]
+      ]
+      ifError: [:_e | nil]
 
   // --- Session startup handshake ---
 
@@ -318,17 +329,22 @@ typed Actor subclass: ClaudeBackend
   handleResult: msg :: Dictionary -> Result(Dictionary, AgentError) =>
     subtype := msg at: "subtype" ifAbsent: ["success"]
     self emitEvent: msg
-    subtype =:= "success"
-      ifTrue: [
-        Logger info: "claude turn completed"
-        ^Result ok: #{"status" => "completed", "message" => msg}
-      ]
-      ifFalse: [
-        Logger error: "claude turn failed" metadata: #{
-          "subtype" => subtype displayString
-        }
-        ^Result error: (ClaudeError turnFailed: msg)
-      ]
+    subtype match: [
+      "success" -> (self turnCompleted: msg);
+      _ -> (self turnFailed: msg subtype: subtype)
+    ]
+
+  /// Result for a successful `result` message.
+  turnCompleted: msg :: Dictionary -> Result(Dictionary, AgentError) =>
+    Logger info: "claude turn completed"
+    Result ok: #{"status" => "completed", "message" => msg}
+
+  /// Error result for a non-success `result` message.
+  turnFailed: msg :: Dictionary subtype: subtype :: Object -> Result(Dictionary, AgentError) =>
+    Logger error: "claude turn failed" metadata: #{
+      "subtype" => subtype displayString
+    }
+    Result error: (ClaudeError turnFailed: msg)
 
   // --- Control channel (permission prompts) ---
 
@@ -346,15 +362,18 @@ typed Actor subclass: ClaudeBackend
         }
         ^nil
       ]
-    subtype =:= "can_use_tool"
-      ifTrue: [^self handlePermissionAsk: request requestId: requestId]
-      ifFalse: [
-        Logger warn: "claude unknown control request" metadata: #{
-          "subtype" => subtype displayString
-        }
-        self sendJson: (ClaudeBackend errorResponse: requestId message: "Unsupported control request")
-        ^nil
-      ]
+    subtype match: [
+      "can_use_tool" -> (self handlePermissionAsk: request requestId: requestId);
+      _ -> (self rejectControl: requestId subtype: subtype)
+    ]
+
+  /// Answers an unknown control subtype with an error response.
+  rejectControl: requestId :: String subtype: subtype :: Object -> Nil =>
+    Logger warn: "claude unknown control request" metadata: #{
+      "subtype" => subtype displayString
+    }
+    self sendJson: (ClaudeBackend errorResponse: requestId message: "Unsupported control request")
+    nil
 
   /// Answers a `can_use_tool` prompt per the configured policy, then
   /// continues streaming (nil) — except AskUserQuestion, which needs a
