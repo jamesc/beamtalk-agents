@@ -47,19 +47,20 @@ typed Actor subclass: CodexClient
         params at: "usage" ifAbsent: [nil]
       ]
     ]
-    usage isNil ifTrue: [^nil]
-    (usage isKindOf: Dictionary) ifFalse: [^nil]
-    #{
-      "input" => (usage at: "input_tokens" ifAbsent: [
-        usage at: "inputTokens" ifAbsent: [0]
-      ]),
-      "output" => (usage at: "output_tokens" ifAbsent: [
-        usage at: "outputTokens" ifAbsent: [0]
-      ]),
-      "total" => (usage at: "total_tokens" ifAbsent: [
-        usage at: "totalTokens" ifAbsent: [0]
-      ])
-    }
+    usage match: [
+      u :: Dictionary -> #{
+        "input" => (u at: "input_tokens" ifAbsent: [
+          u at: "inputTokens" ifAbsent: [0]
+        ]),
+        "output" => (u at: "output_tokens" ifAbsent: [
+          u at: "outputTokens" ifAbsent: [0]
+        ]),
+        "total" => (u at: "total_tokens" ifAbsent: [
+          u at: "totalTokens" ifAbsent: [0]
+        ])
+      };
+      _ -> nil
+    ]
 
   /// Extracts rate limit info from a codex event message, or nil.
   class extractRateLimits: msg :: Dictionary -> Dictionary | Nil =>
@@ -304,76 +305,75 @@ typed Actor subclass: CodexClient
 
   handleStreamMessage: msg :: Dictionary -> Result(Dictionary, CodexError) | Nil =>
     method := msg at: "method" ifAbsent: [nil]
+    method match: [
+      "turn/completed" -> (self turnCompleted: msg);
+      "turn/failed" -> (self turnFailed: msg);
+      "turn/cancelled" -> (self turnCancelled: msg);
+      // Approval requests — auto-approve all types
+      "item/approval/request" -> (self autoApprove: msg);
+      "item/commandExecution/requestApproval" -> (self autoApprove: msg);
+      "item/fileChange/requestApproval" -> (self autoApprove: msg);
+      "item/tool/requestUserInput" -> (self inputRequired: msg);
+      "item/tool/call" -> (self rejectToolCall: msg);
+      _ -> (self passThrough: msg method: method)
+    ]
 
-    // Check for turn completion
-    method == "turn/completed"
-      ifTrue: [
-        Logger info: "codex turn completed"
-        self emitEvent: msg
-        ^Result ok: #{"status" => "completed", "message" => msg}
-      ]
-    method == "turn/failed"
-      ifTrue: [
-        Logger error: "codex turn failed" metadata: #{
-          "method" => method displayString
-        }
-        self emitEvent: msg
-        ^Result error: (CodexError turnFailed: msg)
-      ]
-    method == "turn/cancelled"
-      ifTrue: [
-        Logger warn: "codex turn cancelled"
-        self emitEvent: msg
-        ^Result error: (CodexError turnCancelled: msg)
-      ]
+  /// Result for `turn/completed`.
+  turnCompleted: msg :: Dictionary -> Result(Dictionary, CodexError) =>
+    Logger info: "codex turn completed"
+    self emitEvent: msg
+    Result ok: #{"status" => "completed", "message" => msg}
 
-    // Handle approval requests — auto-approve all types
-    id := msg at: "id" ifAbsent: [nil]
-    ((method == "item/approval/request")
-      or: [
-        (method == "item/commandExecution/requestApproval") or: [
-          method == "item/fileChange/requestApproval"
-        ]
-      ])
-      ifTrue: [
-        Logger debug: "codex auto-approving: " ++ method displayString
-        self sendJson: #{"id" => id, "result" => #{"approved" => true}}
-        self emitEvent: msg
-        ^nil  // Continue streaming
-      ]
+  /// Error result for `turn/failed`.
+  turnFailed: msg :: Dictionary -> Result(Dictionary, CodexError) =>
+    Logger error: "codex turn failed" metadata: #{"method" => "turn/failed"}
+    self emitEvent: msg
+    Result error: (CodexError turnFailed: msg)
 
-    // Handle user input required — hard failure
-    (method == "item/tool/requestUserInput")
-      ifTrue: [
-        Logger warn: "codex requires user input, failing turn"
-        self emitEvent: msg
-        ^Result error: (CodexError turnInputRequired: msg)
-      ]
+  /// Error result for `turn/cancelled`.
+  turnCancelled: msg :: Dictionary -> Result(Dictionary, CodexError) =>
+    Logger warn: "codex turn cancelled"
+    self emitEvent: msg
+    Result error: (CodexError turnCancelled: msg)
 
-    // Handle unsupported tool calls
-    (method == "item/tool/call")
-      ifTrue: [
-        Logger warn: "codex unsupported tool call" metadata: #{
-          "method" => method displayString
-        }
-        self
-          sendJson: #{
-            "id" => id,
-            "result" => #{
-              "success" => false,
-              "error" => "unsupported_tool_call"
-            }
-          }
-        self emitEvent: msg
-        ^nil  // Continue streaming
-      ]
+  /// Approves the request and continues streaming (nil).
+  autoApprove: msg :: Dictionary -> Nil =>
+    Logger debug: "codex auto-approving: " ++ (msg at: "method" ifAbsent: [
+      nil
+    ]) displayString
+    self sendJson: #{
+      "id" => (msg at: "id" ifAbsent: [nil]),
+      "result" => #{"approved" => true}
+    }
+    self emitEvent: msg
+    nil
 
-    // Any other message — log method and continue
+  /// User input required — hard failure.
+  inputRequired: msg :: Dictionary -> Result(Dictionary, CodexError) =>
+    Logger warn: "codex requires user input, failing turn"
+    self emitEvent: msg
+    Result error: (CodexError turnInputRequired: msg)
+
+  /// Unsupported tool call: answer it and continue streaming (nil).
+  rejectToolCall: msg :: Dictionary -> Nil =>
+    Logger warn: "codex unsupported tool call" metadata: #{
+      "method" => "item/tool/call"
+    }
+    self
+      sendJson: #{
+        "id" => (msg at: "id" ifAbsent: [nil]),
+        "result" => #{"success" => false, "error" => "unsupported_tool_call"}
+      }
+    self emitEvent: msg
+    nil
+
+  /// Any other message — log method and continue (nil).
+  passThrough: msg :: Dictionary method: method :: Object -> Nil =>
     method isNil ifFalse: [
       Logger debug: "codex event: " ++ method displayString
     ]
     self emitEvent: msg
-    nil  // Continue streaming
+    nil
 
   // --- Event emission ---
   emitEvent: msg :: Dictionary -> Nil =>
