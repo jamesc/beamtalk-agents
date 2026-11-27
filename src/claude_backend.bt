@@ -47,25 +47,28 @@ typed Actor subclass: ClaudeBackend
 
   /// Spawns a new ClaudeBackend actor bound to the given workspace directory.
   class start: workspacePath :: String config: config :: Dictionary onEvent: callback :: Block(Dictionary, Object) | Nil -> ClaudeBackend =>
+    settings := self settingsFrom: config
+    self spawnWith: ((settings at: #workspacePath put: workspacePath) at: #onEvent put: callback)
+
+  /// The actor settings `config` asks for. A key that is missing or `null`
+  /// (a config read from JSON) takes its default.
+  class settingsFrom: config :: Dictionary -> Dictionary =>
     #{
-      ?"command" => command = "claude",
-      ?"permissionMode" => permissionMode = "acceptEdits",
-      ?"allowedTools" => allowedTools = #(),
-      ?"disallowedTools" => disallowedTools = #(),
-      ?"readTimeoutMs" => readTimeoutMs = 5000,
+      ?"command" => command,
+      ?"permissionMode" => permissionMode,
+      ?"allowedTools" => allowedTools,
+      ?"disallowedTools" => disallowedTools,
+      ?"readTimeoutMs" => readTimeoutMs,
       ?"resumeSessionId" => resumeSessionId
     } := config
-    self
-      spawnWith: #{
-        #workspacePath => workspacePath,
-        #command => command,
-        #permissionMode => permissionMode,
-        #allowedTools => allowedTools,
-        #disallowedTools => disallowedTools,
-        #readTimeoutMs => readTimeoutMs,
-        #onEvent => callback,
-        #resumeSessionId => resumeSessionId
-      }
+    #{
+      #command => (command ifNil: ["claude"]),
+      #permissionMode => (permissionMode ifNil: ["acceptEdits"]),
+      #allowedTools => (allowedTools ifNil: [#()]),
+      #disallowedTools => (disallowedTools ifNil: [#()]),
+      #readTimeoutMs => (readTimeoutMs ifNil: [5000]),
+      #resumeSessionId => resumeSessionId
+    }
 
   // --- Launch ---
 

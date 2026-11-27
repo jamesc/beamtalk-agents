@@ -53,6 +53,34 @@ TestCase subclass: ClaudeBackendTest
     self assert: backend isAlive
     self assert: backend stop equals: #ok
 
+  testSettingsDefaultMissingAndNullConfigValues =>
+    // A config read from JSON may carry `null`: it takes the default, like a
+    // missing key, rather than putting nil into a typed state slot.
+    defaults := #{
+      #command => "claude",
+      #permissionMode => "acceptEdits",
+      #allowedTools => #(),
+      #disallowedTools => #(),
+      #readTimeoutMs => 5000,
+      #resumeSessionId => nil
+    }
+    self assert: (ClaudeBackend settingsFrom: #{}) equals: defaults
+    nulls := #{
+      "command" => nil,
+      "permissionMode" => nil,
+      "allowedTools" => nil,
+      "disallowedTools" => nil,
+      "readTimeoutMs" => nil,
+      "resumeSessionId" => nil
+    }
+    self assert: (ClaudeBackend settingsFrom: nulls) equals: defaults
+    given := ClaudeBackend settingsFrom: #{
+      "command" => "c",
+      "readTimeoutMs" => 7
+    }
+    self assert: (given at: #command) equals: "c"
+    self assert: (given at: #readTimeoutMs) equals: 7
+
   // --- Launch args ---
   testLaunchArgsDefaults =>
     args := ClaudeBackend launchArgs: #{} resumeSessionId: nil
