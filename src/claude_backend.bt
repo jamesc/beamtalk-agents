@@ -48,7 +48,10 @@ typed Actor subclass: ClaudeBackend
   /// Spawns a new ClaudeBackend actor bound to the given workspace directory.
   class start: workspacePath :: String config: config :: Dictionary onEvent: callback :: Block(Dictionary, Object) | Nil -> ClaudeBackend =>
     settings := self settingsFrom: config
-    self spawnWith: ((settings at: #workspacePath put: workspacePath) at: #onEvent put: callback)
+    self
+      spawnWith: (settings
+        |> at: #workspacePath put: workspacePath
+        |> at: #onEvent put: callback)
 
   /// The actor settings `config` asks for. A key that is missing or `null`
   /// (a config read from JSON) takes its default.
