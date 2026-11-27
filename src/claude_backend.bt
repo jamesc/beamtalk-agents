@@ -30,7 +30,7 @@
 ///
 /// Config is a plain Dictionary (no ResolvedConfig coupling, so this file
 /// moves to the `claude` registry package unchanged). Keys, all optional
-/// except through `fromConfig:` defaults: "command", "permissionMode",
+/// except through `settingsFrom:` defaults: "command", "permissionMode",
 /// "allowedTools", "disallowedTools", "readTimeoutMs",
 /// "resumeSessionId".
 typed Actor subclass: ClaudeBackend
