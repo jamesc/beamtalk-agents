@@ -36,6 +36,51 @@ TestCase subclass: ClaudeBackendTest
     self assert: backend stopProcess equals: nil
     self assert: backend stop equals: #ok
 
+  testControlRequestWithoutIdIsDropped =>
+    // A missing or null `request` reads as {}, so a request with no id is
+    // dropped (nil) rather than raising before any reply.
+    backend := ClaudeBackend
+      start: "/tmp"
+      config: #{}
+      onEvent: nil
+    self assert: (backend handleControl: #{
+      "type" => "control_request"
+    }) equals: nil
+    self assert: (backend handleControl: #{
+      "type" => "control_request",
+      "request" => nil
+    }) equals: nil
+    self assert: backend isAlive
+    self assert: backend stop equals: #ok
+
+  testSettingsDefaultMissingAndNullConfigValues =>
+    // A config read from JSON may carry `null`: it takes the default, like a
+    // missing key, rather than putting nil into a typed state slot.
+    defaults := #{
+      #command => "claude",
+      #permissionMode => "acceptEdits",
+      #allowedTools => #(),
+      #disallowedTools => #(),
+      #readTimeoutMs => 5000,
+      #resumeSessionId => nil
+    }
+    self assert: (ClaudeBackend settingsFrom: #{}) equals: defaults
+    nulls := #{
+      "command" => nil,
+      "permissionMode" => nil,
+      "allowedTools" => nil,
+      "disallowedTools" => nil,
+      "readTimeoutMs" => nil,
+      "resumeSessionId" => nil
+    }
+    self assert: (ClaudeBackend settingsFrom: nulls) equals: defaults
+    given := ClaudeBackend settingsFrom: #{
+      "command" => "c",
+      "readTimeoutMs" => 7
+    }
+    self assert: (given at: #command) equals: "c"
+    self assert: (given at: #readTimeoutMs) equals: 7
+
   // --- Launch args ---
   testLaunchArgsDefaults =>
     args := ClaudeBackend launchArgs: #{} resumeSessionId: nil
@@ -158,6 +203,25 @@ TestCase subclass: ClaudeBackendTest
     usage := ClaudeBackend extractUsage: msg
     self assert: (usage at: "input") equals: 7
     self assert: (usage at: "total") equals: 10
+
+  testExtractUsageMissingCountersDefaultToZero =>
+    usage := ClaudeBackend extractUsage: #{"usage" => #{"input_tokens" => 4}}
+    self assert: (usage at: "input") equals: 4
+    self assert: (usage at: "output") equals: 0
+    self assert: (usage at: "total") equals: 4
+
+  testExtractUsageNullCountersCountAsZero =>
+    usage := ClaudeBackend
+      extractUsage: #{
+        "usage" => #{
+          "input_tokens" => nil,
+          "output_tokens" => 2,
+          "total_tokens" => nil
+        }
+      }
+    self assert: (usage at: "input") equals: 0
+    self assert: (usage at: "output") equals: 2
+    self assert: (usage at: "total") equals: 2
 
   testExtractUsageMissingIsNil =>
     self assert: (ClaudeBackend extractUsage: #{"type" => "assistant"}) isNil

@@ -30,7 +30,7 @@
 ///
 /// Config is a plain Dictionary (no ResolvedConfig coupling, so this file
 /// moves to the `claude` registry package unchanged). Keys, all optional
-/// except through `fromConfig:` defaults: "command", "permissionMode",
+/// except through `settingsFrom:` defaults: "command", "permissionMode",
 /// "allowedTools", "disallowedTools", "readTimeoutMs",
 /// "resumeSessionId".
 typed Actor subclass: ClaudeBackend
@@ -47,19 +47,31 @@ typed Actor subclass: ClaudeBackend
 
   /// Spawns a new ClaudeBackend actor bound to the given workspace directory.
   class start: workspacePath :: String config: config :: Dictionary onEvent: callback :: Block(Dictionary, Object) | Nil -> ClaudeBackend =>
+    settings := self settingsFrom: config
     self
-      spawnWith: #{
-        #workspacePath => workspacePath,
-        #command => (config at: "command" ifAbsent: ["claude"]),
-        #permissionMode => (config at: "permissionMode" ifAbsent: [
-          "acceptEdits"
-        ]),
-        #allowedTools => (config at: "allowedTools" ifAbsent: [#()]),
-        #disallowedTools => (config at: "disallowedTools" ifAbsent: [#()]),
-        #readTimeoutMs => (config at: "readTimeoutMs" ifAbsent: [5000]),
-        #onEvent => callback,
-        #resumeSessionId => (config at: "resumeSessionId" ifAbsent: [nil])
-      }
+      spawnWith: (settings
+        |> at: #workspacePath put: workspacePath
+        |> at: #onEvent put: callback)
+
+  /// The actor settings `config` asks for. A key that is missing or `null`
+  /// (a config read from JSON) takes its default.
+  class settingsFrom: config :: Dictionary -> Dictionary =>
+    #{
+      ?"command" => command,
+      ?"permissionMode" => permissionMode,
+      ?"allowedTools" => allowedTools,
+      ?"disallowedTools" => disallowedTools,
+      ?"readTimeoutMs" => readTimeoutMs,
+      ?"resumeSessionId" => resumeSessionId
+    } := config
+    #{
+      #command => (command ifNil: ["claude"]),
+      #permissionMode => (permissionMode ifNil: ["acceptEdits"]),
+      #allowedTools => (allowedTools ifNil: [#()]),
+      #disallowedTools => (disallowedTools ifNil: [#()]),
+      #readTimeoutMs => (readTimeoutMs ifNil: [5000]),
+      #resumeSessionId => resumeSessionId
+    }
 
   // --- Launch ---
 
@@ -145,12 +157,19 @@ typed Actor subclass: ClaudeBackend
 
   /// `{input, output, total}` counters from a usage dictionary.
   class usageCounters: usage :: Dictionary -> Dictionary =>
-    input := usage at: "input_tokens" ifAbsent: [0]
-    output := usage at: "output_tokens" ifAbsent: [0]
+    // A counter may be missing or null; both count as zero, and a missing
+    // or null total is the sum.
+    #{
+      ?"input_tokens" => rawInput,
+      ?"output_tokens" => rawOutput,
+      ?"total_tokens" => total
+    } := usage
+    input := rawInput ifNil: [0]
+    output := rawOutput ifNil: [0]
     #{
       "input" => input,
       "output" => output,
-      "total" => (usage at: "total_tokens" ifAbsent: [input + output])
+      "total" => (total ifNil: [input + output])
     }
 
   /// Opens the `claude` subprocess and sets self.proc.
@@ -352,9 +371,13 @@ typed Actor subclass: ClaudeBackend
   /// get a response or the turn stalls. Unknown subtypes are answered
   /// with an error (still counts as answering).
   handleControl: msg :: Dictionary -> Result(Dictionary, AgentError) | Nil =>
-    request := msg at: "request" ifAbsent: [#{}]
-    requestId := msg at: "request_id" ifAbsent: [nil]
-    subtype := request at: "subtype" ifAbsent: [nil]
+    // `request` may be missing or not an object (null); either reads as {}.
+    #{?"request_id" => requestId} := msg
+    request := msg match: [
+      #{?"request" => r :: Dictionary = #{}} -> r;
+      _ -> #{}
+    ]
+    #{?"subtype" => subtype} := request
     requestId isNil
       ifTrue: [
         Logger warn: "claude control request without id, dropping" metadata: #{
