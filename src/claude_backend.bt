@@ -47,18 +47,24 @@ typed Actor subclass: ClaudeBackend
 
   /// Spawns a new ClaudeBackend actor bound to the given workspace directory.
   class start: workspacePath :: String config: config :: Dictionary onEvent: callback :: Block(Dictionary, Object) | Nil -> ClaudeBackend =>
+    #{
+      ?"command" => command = "claude",
+      ?"permissionMode" => permissionMode = "acceptEdits",
+      ?"allowedTools" => allowedTools = #(),
+      ?"disallowedTools" => disallowedTools = #(),
+      ?"readTimeoutMs" => readTimeoutMs = 5000,
+      ?"resumeSessionId" => resumeSessionId
+    } := config
     self
       spawnWith: #{
         #workspacePath => workspacePath,
-        #command => (config at: "command" ifAbsent: ["claude"]),
-        #permissionMode => (config at: "permissionMode" ifAbsent: [
-          "acceptEdits"
-        ]),
-        #allowedTools => (config at: "allowedTools" ifAbsent: [#()]),
-        #disallowedTools => (config at: "disallowedTools" ifAbsent: [#()]),
-        #readTimeoutMs => (config at: "readTimeoutMs" ifAbsent: [5000]),
+        #command => command,
+        #permissionMode => permissionMode,
+        #allowedTools => allowedTools,
+        #disallowedTools => disallowedTools,
+        #readTimeoutMs => readTimeoutMs,
         #onEvent => callback,
-        #resumeSessionId => (config at: "resumeSessionId" ifAbsent: [nil])
+        #resumeSessionId => resumeSessionId
       }
 
   // --- Launch ---
@@ -145,12 +151,15 @@ typed Actor subclass: ClaudeBackend
 
   /// `{input, output, total}` counters from a usage dictionary.
   class usageCounters: usage :: Dictionary -> Dictionary =>
-    input := usage at: "input_tokens" ifAbsent: [0]
-    output := usage at: "output_tokens" ifAbsent: [0]
+    #{
+      ?"input_tokens" => input = 0,
+      ?"output_tokens" => output = 0,
+      ?"total_tokens" => total
+    } := usage
     #{
       "input" => input,
       "output" => output,
-      "total" => (usage at: "total_tokens" ifAbsent: [input + output])
+      "total" => (total ifNil: [input + output])
     }
 
   /// Opens the `claude` subprocess and sets self.proc.
@@ -352,9 +361,8 @@ typed Actor subclass: ClaudeBackend
   /// get a response or the turn stalls. Unknown subtypes are answered
   /// with an error (still counts as answering).
   handleControl: msg :: Dictionary -> Result(Dictionary, AgentError) | Nil =>
-    request := msg at: "request" ifAbsent: [#{}]
-    requestId := msg at: "request_id" ifAbsent: [nil]
-    subtype := request at: "subtype" ifAbsent: [nil]
+    #{?"request" => request = #{}, ?"request_id" => requestId} := msg
+    #{?"subtype" => subtype} := request
     requestId isNil
       ifTrue: [
         Logger warn: "claude control request without id, dropping" metadata: #{

@@ -159,6 +159,12 @@ TestCase subclass: ClaudeBackendTest
     self assert: (usage at: "input") equals: 7
     self assert: (usage at: "total") equals: 10
 
+  testExtractUsageMissingCountersDefaultToZero =>
+    usage := ClaudeBackend extractUsage: #{"usage" => #{"input_tokens" => 4}}
+    self assert: (usage at: "input") equals: 4
+    self assert: (usage at: "output") equals: 0
+    self assert: (usage at: "total") equals: 4
+
   testExtractUsageMissingIsNil =>
     self assert: (ClaudeBackend extractUsage: #{"type" => "assistant"}) isNil
     self assert: (ClaudeBackend extractUsage: #{"usage" => "nope"}) isNil
