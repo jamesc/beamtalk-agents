@@ -151,11 +151,15 @@ typed Actor subclass: ClaudeBackend
 
   /// `{input, output, total}` counters from a usage dictionary.
   class usageCounters: usage :: Dictionary -> Dictionary =>
+    // A counter may be missing or null; both count as zero, and a missing
+    // or null total is the sum.
     #{
-      ?"input_tokens" => input = 0,
-      ?"output_tokens" => output = 0,
+      ?"input_tokens" => rawInput,
+      ?"output_tokens" => rawOutput,
       ?"total_tokens" => total
     } := usage
+    input := rawInput ifNil: [0]
+    output := rawOutput ifNil: [0]
     #{
       "input" => input,
       "output" => output,
@@ -361,7 +365,12 @@ typed Actor subclass: ClaudeBackend
   /// get a response or the turn stalls. Unknown subtypes are answered
   /// with an error (still counts as answering).
   handleControl: msg :: Dictionary -> Result(Dictionary, AgentError) | Nil =>
-    #{?"request" => request = #{}, ?"request_id" => requestId} := msg
+    // `request` may be missing or not an object (null); either reads as {}.
+    #{?"request_id" => requestId} := msg
+    request := msg match: [
+      #{?"request" => r :: Dictionary = #{}} -> r;
+      _ -> #{}
+    ]
     #{?"subtype" => subtype} := request
     requestId isNil
       ifTrue: [

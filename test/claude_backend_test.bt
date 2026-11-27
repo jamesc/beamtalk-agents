@@ -36,6 +36,23 @@ TestCase subclass: ClaudeBackendTest
     self assert: backend stopProcess equals: nil
     self assert: backend stop equals: #ok
 
+  testControlRequestWithoutIdIsDropped =>
+    // A missing or null `request` reads as {}, so a request with no id is
+    // dropped (nil) rather than raising before any reply.
+    backend := ClaudeBackend
+      start: "/tmp"
+      config: #{}
+      onEvent: nil
+    self assert: (backend handleControl: #{
+      "type" => "control_request"
+    }) equals: nil
+    self assert: (backend handleControl: #{
+      "type" => "control_request",
+      "request" => nil
+    }) equals: nil
+    self assert: backend isAlive
+    self assert: backend stop equals: #ok
+
   // --- Launch args ---
   testLaunchArgsDefaults =>
     args := ClaudeBackend launchArgs: #{} resumeSessionId: nil
@@ -164,6 +181,19 @@ TestCase subclass: ClaudeBackendTest
     self assert: (usage at: "input") equals: 4
     self assert: (usage at: "output") equals: 0
     self assert: (usage at: "total") equals: 4
+
+  testExtractUsageNullCountersCountAsZero =>
+    usage := ClaudeBackend
+      extractUsage: #{
+        "usage" => #{
+          "input_tokens" => nil,
+          "output_tokens" => 2,
+          "total_tokens" => nil
+        }
+      }
+    self assert: (usage at: "input") equals: 0
+    self assert: (usage at: "output") equals: 2
+    self assert: (usage at: "total") equals: 2
 
   testExtractUsageMissingIsNil =>
     self assert: (ClaudeBackend extractUsage: #{"type" => "assistant"}) isNil
